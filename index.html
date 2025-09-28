@@ -155,6 +155,14 @@
       border-radius: 5px;
       margin: 10px 0;
     }
+    .status {
+      font-size: 0.8rem;
+      color: #4A3728;
+      margin-left: 10px;
+    }
+    .registered {
+      color: #228B22;
+    }
     @media (max-width: 600px) {
       .container {
         padding: 15px;
@@ -352,16 +360,31 @@
         const div = document.createElement('div');
         div.className = 'hero-damage';
         const isMyHero = player._id === myHeroId;
-        const pendingDamage = pendingDamages[player._id] ? pendingDamages[player._id].damage : 0;
+        const pending = pendingDamages[player._id] ? pendingDamages[player._id].damage : 0;
+        const status = pending > 0 ? ' (Registrado)' : '';
+        const statusClass = pending > 0 ? 'registered' : '';
         div.innerHTML = `
           <label for="damage-${player._id}">${player.name}:</label>
-          <input type="number" id="damage-${player._id}" placeholder="Dano" min="0" value="${pendingDamage}" ${!isMyHero ? 'disabled' : ''}>
+          <input type="number" id="damage-${player._id}" placeholder="Dano" min="0" value="${pending}" ${!isMyHero ? 'disabled' : ''}>
+          ${isMyHero ? '<button class="save-damage" data-player-id="' + player._id + '">Registrar Meu Dano</button>' : ''}
+          <span class="status ' + statusClass + '">' + status + '</span>
         `;
         roundDamagesDiv.appendChild(div);
-        if (isMyHero) {
-          const input = div.querySelector('input');
-          input.addEventListener('input', (e) => savePendingDamage(player._id, parseInt(e.target.value) || 0));
-        }
+      });
+      // Add event listeners for save buttons
+      const saveButtons = roundDamagesDiv.querySelectorAll('.save-damage');
+      saveButtons.forEach(btn => {
+        btn.onclick = (e) => {
+          const playerId = e.target.dataset.playerId;
+          const input = document.getElementById(`damage-${playerId}`);
+          const damage = parseInt(input.value) || 0;
+          if (damage > 0) {
+            savePendingDamage(playerId, damage);
+            alert('Seu dano foi registrado!');
+          } else {
+            alert('Insira um dano maior que zero!');
+          }
+        };
       });
       checkRoundReady();
       console.log('Inputs de rodada atualizados para', players.length, 'heróis');
