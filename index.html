@@ -195,7 +195,7 @@
     <div class="section" id="damageSection" style="display: none;">
       <h2>Registrar Dano - Rodada Atual: <span id="currentRound">1</span></h2>
       <div id="roundDamages"></div>
-      <button id="submitRoundButton">Registrar Rodada</button>
+      <button id="submitRoundButton" disabled>Registrar Rodada</button>
     </div>
     
     <!-- Total Damage Section -->
@@ -244,6 +244,7 @@
     let currentRound = 1;
     let roomId = '';
     let roomRef;
+    let myHeroId = null; // ID do herói que este dispositivo controla
 
     // DOM elements
     const roomIdInput = document.getElementById('roomIdInput');
@@ -301,12 +302,14 @@
         const data = snapshot.val();
         damagesByRound = data ? Object.values(data) : [];
         updateDamageList();
+        checkRoundReady();
         console.log('Danos sincronizados:', damagesByRound);
       });
 
       roomRef.child('currentRound').on('value', (snapshot) => {
         currentRound = snapshot.val() || 1;
         updateCurrentRound();
+        checkRoundReady();
       });
 
       // Mostrar seções
@@ -332,17 +335,20 @@
       roundDamagesDiv.innerHTML = '';
       if (players.length === 0) {
         roundDamagesDiv.innerHTML = '<p>Adicione heróis para registrar danos.</p>';
+        submitRoundButton.disabled = true;
         return;
       }
       players.forEach(player => {
         const div = document.createElement('div');
         div.className = 'hero-damage';
+        const isMyHero = player._id === myHeroId;
         div.innerHTML = `
           <label for="damage-${player._id}">${player.name}:</label>
-          <input type="number" id="damage-${player._id}" placeholder="Dano" min="0" value="0">
+          <input type="number" id="damage-${player._id}" placeholder="Dano" min="0" value="0" ${!isMyHero ? 'disabled' : ''}>
         `;
         roundDamagesDiv.appendChild(div);
       });
+      checkRoundReady();
       console.log('Inputs de rodada atualizados para', players.length, 'heróis');
     }
 
@@ -376,7 +382,21 @@
       console.log('Histórico atualizado:', damagesByRound);
     }
 
-    // Add hero
+    // Check if round is ready to submit
+    function checkRoundReady() {
+      if (damagesByRound.length < currentRound || players.length === 0) {
+        submitRoundButton.disabled = true;
+        return;
+      }
+      const currentRoundDamages = damagesByRound[currentRound - 1] || [];
+      const allHaveDamage = players.every(player => {
+        const damageEntry = currentRoundDamages.find(d => d.playerId === player._id);
+        return damageEntry && damageEntry.damage > 0;
+      });
+      submitRoundButton.disabled = !allHaveDamage;
+    }
+
+    // Add hero and claim it
     function addHero() {
       const name = playerNameInput.value.trim();
       if (!name) {
@@ -388,35 +408,38 @@
         return;
       }
       const newPlayer = { _id: generateId(), name, timestamp: new Date().toISOString() };
+      if (myHeroId === null) {
+        myHeroId = newPlayer._id; // Este dispositivo reclama o herói
+      }
       roomRef.child('players').push(newPlayer);
       playerNameInput.value = '';
       console.log('Herói adicionado:', newPlayer);
-      alert(`Herói ${newPlayer.name} adicionado para todos!`);
+      alert(`Herói ${newPlayer.name} adicionado! Este dispositivo controla este herói.`);
     }
 
-    // Submit round
+    // Submit round only when all have damage
     function submitRound() {
       if (players.length === 0) {
         alert('Adicione pelo menos um herói antes de registrar uma rodada!');
         return;
       }
-      const roundDamages = [];
+      const currentRoundDamages = [];
       let hasDamage = false;
       players.forEach(player => {
         const input = document.getElementById(`damage-${player._id}`);
         const damage = parseInt(input.value) || 0;
         if (damage > 0) hasDamage = true;
-        roundDamages.push({ _id: generateId(), playerId: player._id, damage, timestamp: new Date().toISOString() });
-        input.value = '0';
+        currentRoundDamages.push({ _id: generateId(), playerId: player._id, damage, timestamp: new Date().toISOString() });
+        input.value = '0'; // Reseta o input só do herói deste dispositivo
       });
       if (!hasDamage) {
         alert('Pelo menos um herói deve registrar dano maior que zero!');
         return;
       }
       const newRoundIndex = damagesByRound.length;
-      roomRef.child(`damagesByRound/${newRoundIndex}`).set(roundDamages);
+      roomRef.child(`damagesByRound/${newRoundIndex}`).set(currentRoundDamages);
       roomRef.child('currentRound').set(currentRound + 1);
-      console.log('Rodada registrada:', roundDamages);
+      console.log('Rodada registrada:', currentRoundDamages);
       alert(`Rodada ${currentRound} registrada para todos!`);
     }
 
@@ -424,6 +447,7 @@
     function resetHeroes() {
       if (!confirm('Tem certeza? Isso resetará heróis para todos na sala.')) return;
       roomRef.child('players').remove();
+      myHeroId = null; // Reseta o herói controlado
       console.log('Heróis resetados');
       alert('Heróis resetados para todos!');
     }
@@ -434,6 +458,7 @@
       roomRef.child('players').remove();
       roomRef.child('damagesByRound').remove();
       roomRef.child('currentRound').set(1);
+      myHeroId = null; // Reseta o herói controlado
       console.log('Tudo reiniciado');
       alert('Tudo reiniciado para todos!');
     }
