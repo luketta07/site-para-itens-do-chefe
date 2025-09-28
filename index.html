@@ -1,839 +1,495 @@
+
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Tela de sorteio celestial para até 4 heróis lendários e 3 artefatos místicos, com design orbital otimizado para mobile." />
-  <title>Órbita dos Artefatos Celestiais</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPG Damage Tracker Multiplayer</title>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js"></script>
   <style>
-    :root {
-      --bg: #0d0b2a;
-      --card: #1b143f;
-      --accent: #7b00ff;
-      --accent-hover: #a933ff;
-      --muted: #b8a9ff;
-      --glass: rgba(200, 180, 255, 0.2);
-      --text: #ffffff;
-      --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-    }
     * {
+      margin: 0;
+      padding: 0;
       box-sizing: border-box;
-      transition: all 0.3s ease-in-out;
     }
     body {
-      margin: 0;
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(135deg, #F5F5DC 0%, #E6D9B8 100%);
       min-height: 100vh;
-      font-family: sans-serif;
-      background: radial-gradient(circle at center, #1b143f 0%, #0d0b2a 100%);
-      color: var(--text);
       display: flex;
       justify-content: center;
-      align-items: center;
       padding: 20px;
-      overflow-y: auto;
     }
-    #backgroundCanvas {
-      position: fixed;
-      top: 0;
-      left: 0;
+    .container {
+      max-width: 800px;
       width: 100%;
-      height: 100%;
-      z-index: -1;
-      opacity: 0.2;
+      background: #FFF8E1;
+      border-radius: 10px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      text-align: center;
+      border: 2px solid #D4A017;
     }
-    .core {
-      width: 90%;
-      max-width: 1200px;
-      min-height: 100vh;
+    h1 {
+      color: #4A3728;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+    }
+    h2 {
+      color: #4A3728;
+      font-size: 1.5rem;
+      margin: 15px 0;
+    }
+    .section {
+      margin: 15px 0;
+      padding: 15px;
+      background: rgba(255, 248, 225, 0.9);
+      border-radius: 8px;
+      border: 1px solid #D2B48C;
+    }
+    form {
       display: flex;
       flex-wrap: wrap;
-      gap: 20px;
-      align-items: center;
-      justify-content: center;
-      padding-bottom: 120px;
-    }
-    @media (max-width: 860px) {
-      .core {
-        flex-direction: column;
-        align-items: center;
-        padding-bottom: 120px;
-      }
-    }
-    .card {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--accent);
-      width: 100%;
-      max-width: 320px;
-      margin: 10px auto;
-    }
-    .card:hover {
-      transform: scale(1.03);
-      box-shadow: 0 4px 16px rgba(123, 0, 255, 0.5);
-    }
-    @media (min-width: 861px) {
-      .card.result {
-        max-width: 400px;
-        margin: 20px auto;
-      }
-    }
-    .section-title {
-      font-family: sans-serif;
-      font-size: 18px;
-      color: var(--accent);
-      margin-bottom: 12px;
-      text-align: center;
-      text-transform: uppercase;
-      letter-spacing: 1.5px;
-    }
-    .row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    input[type=text] {
-      flex: 1;
-      padding: 10px;
-      border-radius: 6px;
-      border: 1px solid var(--glass);
-      background: var(--glass);
-      color: var(--text);
-      font-size: 15px;
-      font-family: sans-serif;
-      min-height: 44px;
-    }
-    input[type=text]:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 8px var(--accent);
-    }
-    button {
-      background: linear-gradient(45deg, var(--accent), var(--accent-hover));
-      color: var(--text);
-      border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 15px;
-      font-family: sans-serif;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      min-height: 44px;
-      min-width: 90px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    button:focus {
-      outline: 2px solid #ffffff;
-      outline-offset: 2px;
-    }
-    #addPlayerBtn, #addItemBtn {
-      background: var(--accent);
-      font-size: 18px;
-      padding: 12px 12px;
-      min-width: 50px;
-    }
-    #mobileAddPlayer, #mobileAddItem {
-      background: var(--accent);
-      font-size: 13px;
-      padding: 10px 18px;
-      min-width: 90px;
-      max-width: 110px;
-    }
-    button:hover {
-      background: var(--accent-hover);
-      transform: scale(1.03);
-    }
-    button.ghost {
-      background: transparent;
-      border: 1px solid var(--accent);
-      color: var(--text);
-    }
-    button.ghost:hover {
-      background: var(--glass);
-    }
-    button:disabled {
-      background: #3a2f6a;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .list {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-    .pill {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-radius: 6px;
-      background: var(--glass);
-      border: 1px solid rgba(200, 180, 255, 0.2);
-      touch-action: pan-y;
-    }
-    .pill:hover {
-      background: rgba(200, 180, 255, 0.3);
-      transform: translateX(2px);
-    }
-    .pill span {
-      font-family: sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-    }
-    .pill.awarded span {
-      opacity: 0.6;
-      text-decoration: line-through;
-    }
-    .pill.swiped {
-      transform: translateX(-100%);
-      opacity: 0;
-      transition: transform 0.3s ease, opacity 0.3s ease;
-    }
-    .remove, .close-btn {
-      background: transparent;
-      border: none;
-      color: #ff4d4d;
-      cursor: pointer;
-      font-size: 15px;
-      min-height: 44px;
-      min-width: 44px;
-      padding: 0;
-    }
-    .remove:hover, .close-btn:hover {
-      color: #ff8080;
-    }
-    .result {
-      min-height: 180px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       justify-content: center;
       gap: 10px;
-      text-align: center;
+      margin: 15px 0;
     }
-    .big {
-      font-family: sans-serif;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 1px;
+    input {
+      padding: 10px;
+      font-size: 1rem;
+      border: 2px solid #D2B48C;
+      border-radius: 6px;
+      background: #FFF8E1;
+      color: #4A3728;
+      width: 180px;
     }
-    .winner {
-      color: var(--text);
-      text-shadow: 0 0 8px var(--accent);
-      animation: glowPulse 1.5s infinite;
+    button {
+      padding: 10px 20px;
+      font-size: 1rem;
+      background: #8B5A2B;
+      color: #FFF8E1;
+      border: 2px solid #D4A017;
+      border-radius: 6px;
+      cursor: pointer;
     }
-    .itemWon {
-      color: #66ffcc;
-      text-shadow: 0 0 6px #66ffcc;
-      animation: fadeInScale 0.8s ease;
+    button:hover {
+      background: #A0522D;
     }
-    .small {
-      font-family: sans-serif;
-      font-size: 13px;
-      color: var(--muted);
-      font-style: italic;
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
     }
-    .controls {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      margin-top: 10px;
-      flex-wrap: wrap;
+    .reset-button {
+      background: #B22222;
     }
-    #previewContainer {
-      margin-top: 12px;
-      width: 100%;
-      max-height: 180px;
-      overflow-y: auto;
+    .reset-button:hover {
+      background: #8B0000;
     }
-    #confettiCanvas {
-      position: fixed;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 999;
+    .reset-heroes-button {
+      background: #6A5ACD;
     }
-    #winnerOverlay, #limitNotification {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 10, 50, 0.9);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.5s ease;
+    .reset-heroes-button:hover {
+      background: #483D8B;
     }
-    #winnerOverlay.show, #limitNotification.show {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    #winnerOverlay .overlayContent, #limitNotification .notificationContent {
-      background: var(--card);
-      border: 2px solid var(--accent);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      box-shadow: var(--shadow);
-      max-width: 360px;
-      position: relative;
-    }
-    #winnerOverlay h1, #limitNotification h2 {
-      font-family: sans-serif;
-      font-size: 28px;
-      margin: 0 0 10px;
-      color: var(--text);
-    }
-    #winnerOverlay h2 {
-      font-family: sans-serif;
-      font-size: 20px;
-      margin-top: 12px;
-      color: #66ffcc;
-    }
-    #limitNotification p {
-      font-family: sans-serif;
-      font-size: 14px;
-      color: var(--muted);
-      margin: 0;
-    }
-    .history-container {
-      width: 100%;
-      max-width: 500px;
-      margin: 0 auto;
-      display: block;
+    ul {
+      list-style: none;
       max-height: 300px;
       overflow-y: auto;
-      text-align: center;
-    }
-    #history {
-      margin: 12px auto 0;
-      width: 100%;
-      max-width: 500px;
-      border-collapse: collapse;
-      font-size: 13px;
-      background: var(--glass);
-      box-shadow: var(--shadow);
-      overflow-x: auto;
-      display: block;
-    }
-    #history th, #history td {
-      border: 1px solid rgba(200, 180, 255, 0.2);
       padding: 10px;
-      text-align: center;
-      width: 50%;
+      background: rgba(255, 248, 225, 0.9);
+      border-radius: 8px;
+      border: 1px solid #D2B48C;
     }
-    #history th {
-      background: var(--card);
-      color: var(--accent);
-      font-family: sans-serif;
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-    #history td {
-      background: rgba(200, 180, 255, 0.1);
-      color: var(--text);
-    }
-    #previewTable {
-      margin-top: 0;
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      background: var(--glass);
-      overflow-x: auto;
-      display: block;
-      border: 1px solid var(--accent);
-    }
-    #previewTable th, #previewTable td {
-      border: 1px solid rgba(200, 180, 255, 0.2);
+    li {
+      background: #FFF8E1;
       padding: 8px;
-      text-align: center;
-      width: 50%;
+      margin: 5px 0;
+      border-radius: 5px;
+      color: #4A3728;
+      font-size: 0.9rem;
     }
-    #previewTable th {
-      background: var(--card);
-      color: var(--accent);
-      font-family: sans-serif;
-      font-weight: 600;
+    li.round-total {
+      font-weight: bold;
+      color: #8B5A2B;
+      margin-top: 10px;
     }
-    #previewTable td {
-      background: rgba(200, 180, 255, 0.1);
-      color: var(--text);
+    #totalDamage {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #8B5A2B;
     }
-    .mobile-nav {
-      display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: var(--card);
-      padding: 8px;
-      box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.4);
-      z-index: 1000;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 6px;
+    #currentRound {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #4A3728;
     }
-    .mobile-nav button {
-      max-width: 110px;
-      font-size: 13px;
-      padding: 10px 18px;
+    #roundDamages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 15px;
     }
-    @media (max-width: 860px) {
-      .mobile-nav {
-        display: flex;
+    .hero-damage {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .hero-damage label {
+      font-weight: bold;
+      color: #4A3728;
+    }
+    .hero-damage input {
+      width: 100px;
+    }
+    #roomIdSection {
+      background: rgba(255, 248, 225, 0.9);
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .error {
+      color: #B22222;
+      font-weight: bold;
+      background: rgba(255, 34, 34, 0.1);
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    @media (max-width: 600px) {
+      .container {
+        padding: 15px;
       }
-      .card .controls {
-        display: none;
+      h1 {
+        font-size: 2rem;
       }
-      #winnerOverlay h1, #limitNotification h2 {
-        font-size: 24px;
+      input, button {
+        width: 100%;
+        margin: 5px 0;
       }
-      #winnerOverlay h2 {
-        font-size: 18px;
-      }
-      #limitNotification p {
-        font-size: 13px;
-      }
-    }
-    @keyframes glowPulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-    @keyframes fadeInScale {
-      0% { opacity: 0; transform: scale(0.7); }
-      70% { opacity: 1; transform: scale(1.05); }
-      100% { transform: scale(1); }
     }
   </style>
 </head>
 <body>
-  <canvas id="backgroundCanvas"></canvas>
-  <canvas id="confettiCanvas"></canvas>
-  <div id="winnerOverlay" role="dialog" aria-labelledby="winnerName" aria-describedby="winnerItem">
-    <div class="overlayContent">
-      <button class="close-btn" aria-label="Fechar resultado do sorteio">✖</button>
-      <h1 id="winnerName"></h1>
-      <h2 id="winnerItem"></h2>
+  <div class="container">
+    <h1>RPG Damage Tracker Multiplayer</h1>
+    
+    <!-- Room ID Section -->
+    <div class="section">
+      <h2>ID da Sala de Batalha</h2>
+      <div id="roomIdSection">
+        <input type="text" id="roomIdInput" placeholder="Digite o ID da sala (ex: batalha123)" value="">
+        <button id="joinRoomButton">Entrar na Sala</button>
+        <p id="roomStatus" style="color: #8B5A2B; font-weight: bold;"></p>
+        <div id="errorMessage" class="error" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Registration Section -->
+    <div class="section" id="registrationSection" style="display: none;">
+      <h2>Adicionar Herói</h2>
+      <input type="text" id="playerName" placeholder="Nome do Herói">
+      <button id="registerButton">Adicionar Herói</button>
+    </div>
+    
+    <!-- Damage Logging Section -->
+    <div class="section" id="damageSection" style="display: none;">
+      <h2>Registrar Dano - Rodada Atual: <span id="currentRound">1</span></h2>
+      <div id="roundDamages"></div>
+      <button id="submitRoundButton">Registrar Rodada</button>
+    </div>
+    
+    <!-- Total Damage Section -->
+    <div class="section" id="totalSection" style="display: none;">
+      <h2>Total de Dano: <span id="totalDamage">0</span></h2>
+    </div>
+    
+    <!-- Damage History Section -->
+    <div class="section" id="historySection" style="display: none;">
+      <h2>Histórico de Danos</h2>
+      <ul id="damageList"></ul>
+      <button class="reset-heroes-button" id="resetHeroesButton">Resetar Heróis</button>
+      <button class="reset-button" id="resetButton">Reiniciar Tudo</button>
     </div>
   </div>
-  <div id="limitNotification" role="alert" aria-live="assertive">
-    <div class="notificationContent">
-      <button class="close-btn" aria-label="Fechar notificação de limite">✖</button>
-      <h2 id="limitTitle"></h2>
-      <p id="limitMessage"></p>
-    </div>
-  </div>
-  <div class="core">
-    <header style="text-align: center; width: 100%;">
-      <h1 style="font-family: sans-serif; font-size: 28px; color: var(--text); margin: 0;">Órbita dos Artefatos Celestiais</h1>
-      <div class="limit-info" style="font-size: 13px; color: var(--muted); font-style: italic;" aria-label="Limite de heróis e artefatos">Máximo: 4 heróis • 3 artefatos</div>
-    </header>
-    <div class="card heroes">
-      <div class="section-title">Heróis Lendários</div>
-      <div class="row">
-        <input id="playerName" type="text" placeholder="Nome do herói" maxlength="24" aria-label="Nome do herói" />
-        <button id="addPlayerBtn" aria-label="Inscrever herói" aria-describedby="addPlayerTooltip">+</button>
-      </div>
-      <div id="playersList" class="list" aria-live="polite"></div>
-      <span id="addPlayerTooltip" style="display: none;">Adiciona um herói à órbita (máximo 4).</span>
-    </div>
-    <div class="card items">
-      <div class="section-title">Artefatos Místicos</div>
-      <div class="row">
-        <input id="itemName" type="text" placeholder="Nome do artefato" maxlength="36" aria-label="Nome do artefato" />
-        <button id="addItemBtn" aria-label="Adicionar artefato" aria-describedby="addItemTooltip">+</button>
-      </div>
-      <div id="itemsList" class="list" aria-live="polite"></div>
-      <span id="addItemTooltip" style="display: none;">Adiciona um artefato à órbita (máximo 3).</span>
-    </div>
-    <div class="card result">
-      <div class="section-title">Sorteio Celestial</div>
-      <div class="result" id="resultArea" role="status">
-        <div class="small">Adicione heróis e artefatos para o sorteio.</div>
-      </div>
-      <div class="controls">
-        <button id="drawBtn" disabled aria-label="Sortear artefato e herói" aria-describedby="drawTooltip">Sortear</button>
-        <button id="previewBtn" class="ghost" aria-label="Visualizar destino" aria-describedby="previewTooltip">Visualizar</button>
-        <button id="resetBtn" class="ghost" aria-label="Resetar órbita" aria-describedby="resetTooltip">Resetar</button>
-      </div>
-      <span id="drawTooltip" style="display: none;">Inicia o sorteio celestial.</span>
-      <span id="previewTooltip" style="display: none;">Mostra heróis e artefatos disponíveis.</span>
-      <span id="resetTooltip" style="display: none;">Limpa todos os heróis e artefatos.</span>
-      <div id="previewContainer" role="region" aria-live="polite"></div>
-    </div>
-    <div class="history-container">
-      <h2 style="font-family: sans-serif; font-size: 18px; color: var(--accent); text-align: center;">Crônicas Celestiais</h2>
-      <table id="history" role="grid">
-        <thead>
-          <tr>
-            <th scope="col">Herói</th>
-            <th scope="col">Artefato</th>
-          </tr>
-        </thead>
-        <tbody id="historyBody"></tbody>
-      </table>
-    </div>
-  </div>
-  <nav class="mobile-nav">
-    <button id="mobileAddPlayer" aria-label="Inscrever herói" aria-describedby="addPlayerTooltip">Inscrever</button>
-    <button id="mobileAddItem" aria-label="Adicionar artefato" aria-describedby="addItemTooltip">Adicionar</button>
-    <button id="mobileDraw" disabled aria-label="Sortear artefato e herói" aria-describedby="drawTooltip">Sortear</button>
-    <button id="mobilePreview" class="ghost" aria-label="Visualizar destino" aria-describedby="previewTooltip">Visualizar</button>
-    <button id="mobileReset" class="ghost" aria-label="Resetar órbita" aria-describedby="resetTooltip">Resetar</button>
-  </nav>
-  <!-- Áudios removidos para funcionamento local. Para reativar, descomente as linhas abaixo e forneça arquivos de áudio locais:
-  <audio id="fanfare" src="path/to/fanfare.mp3" preload="auto"></audio>
-  <audio id="crowd" src="path/to/crowd.mp3" preload="auto"></audio>
-  <audio id="happy" src="path/to/happy.mp3" preload="auto"></audio>
-  -->
+
   <script>
-    const players = [], items = [];
-    const playersList = document.getElementById('playersList');
-    const itemsList = document.getElementById('itemsList');
-    const addPlayerBtn = document.getElementById('addPlayerBtn');
-    const addItemBtn = document.getElementById('addItemBtn');
+    // Firebase Config do seu projeto
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6ZZQybZ_JaPtrjP4iNYPD1kVzdVNi_Dg",
+      authDomain: "rpg-damage-tracker-72295.firebaseapp.com",
+      databaseURL: "https://rpg-damage-tracker-72295-default-rtdb.firebaseio.com",
+      projectId: "rpg-damage-tracker-72295",
+      storageBucket: "rpg-damage-tracker-72295.firebasestorage.app",
+      messagingSenderId: "132994546781",
+      appId: "1:132994546781:web:f9dd15473a4c606c70e1b4"
+    };
+
+    let db;
+    let firebaseInitialized = false;
+
+    try {
+      // Inicializar Firebase
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.database();
+      firebaseInitialized = true;
+      console.log('Firebase inicializado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao inicializar Firebase:', error);
+      showError('Erro no Firebase: Verifique a configuração. O site pode não sincronizar online.');
+    }
+
+    // Data local (para UI rápida)
+    let players = [];
+    let damagesByRound = [];
+    let currentRound = 1;
+    let roomId = '';
+    let roomRef;
+
+    // DOM elements
+    const roomIdInput = document.getElementById('roomIdInput');
+    const joinRoomButton = document.getElementById('joinRoomButton');
+    const roomStatus = document.getElementById('roomStatus');
+    const errorMessage = document.getElementById('errorMessage');
+    const registrationSection = document.getElementById('registrationSection');
+    const damageSection = document.getElementById('damageSection');
+    const totalSection = document.getElementById('totalSection');
+    const historySection = document.getElementById('historySection');
     const playerNameInput = document.getElementById('playerName');
-    const itemNameInput = document.getElementById('itemName');
-    const drawBtn = document.getElementById('drawBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const previewBtn = document.getElementById('previewBtn');
-    const mobileAddPlayer = document.getElementById('mobileAddPlayer');
-    const mobileAddItem = document.getElementById('mobileAddItem');
-    const mobileDraw = document.getElementById('mobileDraw');
-    const mobilePreview = document.getElementById('mobilePreview');
-    const mobileReset = document.getElementById('mobileReset');
-    const resultArea = document.getElementById('resultArea');
-    const previewContainer = document.getElementById('previewContainer');
-    const winnerOverlay = document.getElementById('winnerOverlay');
-    const winnerName = document.getElementById('winnerName');
-    const winnerItem = document.getElementById('winnerItem');
-    const limitNotification = document.getElementById('limitNotification');
-    const limitTitle = document.getElementById('limitTitle');
-    const limitMessage = document.getElementById('limitMessage');
-    const historyBody = document.getElementById('historyBody');
-    const backgroundCanvas = document.getElementById('backgroundCanvas');
-    const ctx = backgroundCanvas.getContext('2d');
+    const roundDamagesDiv = document.getElementById('roundDamages');
+    const currentRoundSpan = document.getElementById('currentRound');
+    const totalDamageDisplay = document.getElementById('totalDamage');
+    const damageList = document.getElementById('damageList');
+    const registerButton = document.getElementById('registerButton');
+    const submitRoundButton = document.getElementById('submitRoundButton');
+    const resetHeroesButton = document.getElementById('resetHeroesButton');
+    const resetButton = document.getElementById('resetButton');
 
-    function setupBackgroundCanvas() {
-      function resizeCanvas() {
-        backgroundCanvas.width = window.innerWidth;
-        backgroundCanvas.height = window.innerHeight;
-        const c = document.getElementById('confettiCanvas');
-        c.width = window.innerWidth;
-        c.height = window.innerHeight;
-      }
-      resizeCanvas();
-      const stars = [];
-      const isMobile = window.innerWidth <= 860;
-      const starCount = isMobile ? 20 : 30;
-      for (let i = 0; i < starCount; i++) {
-        stars.push({
-          x: Math.random() * backgroundCanvas.width,
-          y: Math.random() * backgroundCanvas.height,
-          radius: Math.random() * 1.5 + 1,
-          speedX: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
-          speedY: (Math.random() - 0.5) * (isMobile ? 0.2 : 0.3),
-          opacity: Math.random() * 0.4 + 0.2,
-        });
-      }
-      function animateBackground() {
-        ctx.clearRect(0, 0, backgroundCanvas.width, backgroundCanvas.height);
-        stars.forEach(s => {
-          s.x += s.speedX;
-          s.y += s.speedY;
-          if (s.x < 0 || s.x > backgroundCanvas.width) s.speedX *= -1;
-          if (s.y < 0 || s.y > backgroundCanvas.height) s.speedY *= -1;
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(255, 255, 255, ${s.opacity})`;
-          ctx.fill();
-        });
-        requestAnimationFrame(animateBackground);
-      }
-      animateBackground();
+    // Mostrar erro na UI
+    function showError(message) {
+      errorMessage.textContent = message;
+      errorMessage.style.display = 'block';
     }
 
-    function debounce(func, wait) {
-      let timeout;
-      return function executedFunction(...args) {
-        const later = () => {
-          clearTimeout(timeout);
-          func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-      };
+    // Generate ID
+    function generateId() {
+      return Math.random().toString(36).substr(2, 9);
     }
 
-    function showLimitNotification(title, message) {
-      limitTitle.textContent = title;
-      limitMessage.textContent = message;
-      limitNotification.classList.add('show');
-      limitNotification.focus();
-      setTimeout(() => {
-        limitNotification.classList.remove('show');
-      }, 3000);
+    // Join Room
+    function joinRoom() {
+      if (!firebaseInitialized) {
+        showError('Firebase não configurado. Configure para usar multiplayer.');
+        return;
+      }
+
+      roomId = roomIdInput.value.trim().toLowerCase();
+      if (!roomId) {
+        alert('Digite um ID de sala válido!');
+        return;
+      }
+      roomRef = db.ref(`rooms/${roomId}`);
+      
+      // Listeners para sincronização em tempo real
+      roomRef.child('players').on('value', (snapshot) => {
+        players = snapshot.val() ? Object.values(snapshot.val()) : [];
+        updateRoundInputs();
+        updateDamageList();
+        console.log('Jogadores sincronizados:', players);
+      });
+
+      roomRef.child('damagesByRound').on('value', (snapshot) => {
+        const data = snapshot.val();
+        damagesByRound = data ? Object.values(data) : [];
+        updateDamageList();
+        console.log('Danos sincronizados:', damagesByRound);
+      });
+
+      roomRef.child('currentRound').on('value', (snapshot) => {
+        currentRound = snapshot.val() || 1;
+        updateCurrentRound();
+      });
+
+      // Mostrar seções
+      registrationSection.style.display = 'block';
+      damageSection.style.display = 'block';
+      totalSection.style.display = 'block';
+      historySection.style.display = 'block';
+      roomStatus.textContent = `Conectado à sala: ${roomId.toUpperCase()}`;
+      joinRoomButton.disabled = true;
+      roomIdInput.disabled = true;
+      errorMessage.style.display = 'none';
+
+      console.log(`Entrou na sala: ${roomId}`);
     }
 
-    function renderLists() {
-      playersList.innerHTML = '';
-      players.forEach((p, idx) => {
+    // Update current round display
+    function updateCurrentRound() {
+      currentRoundSpan.textContent = currentRound;
+    }
+
+    // Update inputs for current round
+    function updateRoundInputs() {
+      roundDamagesDiv.innerHTML = '';
+      if (players.length === 0) {
+        roundDamagesDiv.innerHTML = '<p>Adicione heróis para registrar danos.</p>';
+        return;
+      }
+      players.forEach(player => {
         const div = document.createElement('div');
-        div.className = 'pill';
-        if (p.awarded) div.className += ' awarded';
-        div.innerHTML = `<span>${idx + 1}. ${escapeHtml(p.name)}</span><div><button class="remove" data-idx="${idx}" aria-label="Remover herói ${escapeHtml(p.name)}">✖</button></div>`;
-        div.setAttribute('role', 'listitem');
-        setupSwipe(div, idx, 'player');
-        playersList.appendChild(div);
+        div.className = 'hero-damage';
+        div.innerHTML = `
+          <label for="damage-${player._id}">${player.name}:</label>
+          <input type="number" id="damage-${player._id}" placeholder="Dano" min="0" value="0">
+        `;
+        roundDamagesDiv.appendChild(div);
       });
-      itemsList.innerHTML = '';
-      items.forEach((it, idx) => {
-        const div = document.createElement('div');
-        div.className = 'pill';
-        if (it.awarded) div.className += ' awarded';
-        div.innerHTML = `<span>${idx + 1}. ${escapeHtml(it.name)}</span><div><button class="remove" data-type="item" data-idx="${idx}" aria-label="Remover artefato ${escapeHtml(it.name)}">✖</button></div>`;
-        div.setAttribute('role', 'listitem');
-        setupSwipe(div, idx, 'item');
-        itemsList.appendChild(div);
-      });
-      const canDraw = players.some(p => !p.awarded) && items.some(i => !i.awarded);
-      drawBtn.disabled = !canDraw;
-      mobileDraw.disabled = !canDraw;
-      drawBtn.setAttribute('aria-disabled', !canDraw);
-      mobileDraw.setAttribute('aria-disabled', !canDraw);
+      console.log('Inputs de rodada atualizados para', players.length, 'heróis');
     }
 
-    function escapeHtml(t) {
-      const p = document.createElement('p');
-      p.textContent = t;
-      return p.innerHTML;
-    }
-
-    function setupSwipe(element, idx, type) {
-      let touchStartX = 0;
-      let touchEndX = 0;
-      element.addEventListener('touchstart', e => {
-        touchStartX = e.changedTouches[0].screenX;
-      });
-      element.addEventListener('touchend', e => {
-        touchEndX = e.changedTouches[0].screenX;
-        if (touchStartX - touchEndX > 50) {
-          element.classList.add('swiped');
-          setTimeout(() => {
-            if (type === 'player') players.splice(idx, 1);
-            else items.splice(idx, 1);
-            renderLists();
-          }, 300);
-        }
-      });
-    }
-
-    addPlayerBtn.onclick = mobileAddPlayer.onclick = () => {
-      const n = playerNameInput.value.trim();
-      if (!n) {
-        playerNameInput.focus();
-        return;
-      }
-      if (players.length >= 4) {
-        showLimitNotification('Limite de Heróis Atingido', 'A órbita suporta apenas 4 heróis lendários!');
-        return;
-      }
-      players.push({ name: n, awarded: false });
-      playerNameInput.value = '';
-      renderLists();
-      playerNameInput.focus();
-    };
-
-    addItemBtn.onclick = mobileAddItem.onclick = () => {
-      const n = itemNameInput.value.trim();
-      if (!n) {
-        itemNameInput.focus();
-        return;
-      }
-      if (items.length >= 3) {
-        showLimitNotification('Limite de Artefatos Atingido', 'Apenas 3 artefatos místicos podem ser registrados!');
-        return;
-      }
-      items.push({ name: n, awarded: false });
-      itemNameInput.value = '';
-      renderLists();
-      itemNameInput.focus();
-    };
-
-    document.addEventListener('click', e => {
-      if (e.target.matches('.remove') || e.target.matches('.close-btn')) {
-        const idx = e.target.dataset.idx ? +e.target.dataset.idx : null;
-        const type = e.target.dataset.type || 'player';
-        if (idx !== null) {
-          if (type === 'player') players.splice(idx, 1);
-          else items.splice(idx, 1);
-          renderLists();
-        } else {
-          winnerOverlay.classList.remove('show');
-          limitNotification.classList.remove('show');
-        }
-      }
-    });
-
-    resetBtn.onclick = mobileReset.onclick = () => {
-      players.length = 0;
-      items.length = 0;
-      historyBody.innerHTML = '';
-      previewContainer.innerHTML = '';
-      renderLists();
-      resultArea.innerHTML = '<div class="small">Adicione heróis e artefatos para o sorteio.</div>';
-      resultArea.setAttribute('aria-live', 'polite');
-    };
-
-    previewBtn.onclick = mobilePreview.onclick = () => {
-      previewContainer.innerHTML = '';
-      const availablePlayers = players.filter(p => !p.awarded);
-      const availableItems = items.filter(i => !i.awarded);
-      if (!availablePlayers.length && !availableItems.length) {
-        previewContainer.innerHTML = '<div class="small">Nenhum herói ou artefato disponível para visualização.</div>';
-      } else {
-        let html = '<table id="previewTable" role="grid"><thead><tr><th scope="col">Herói</th><th scope="col">Artefato</th></tr></thead><tbody>';
-        availablePlayers.forEach(p => {
-          html += `<tr><td>${escapeHtml(p.name)}</td><td>${p.item ? escapeHtml(p.item) : '—'}</td></tr>`;
-        });
-        availableItems.forEach(i => {
-          if (!players.some(p => p.item === i.name)) {
-            html += `<tr><td>—</td><td>${escapeHtml(i.name)}</td></tr>`;
+    // Update damage list and total
+    function updateDamageList() {
+      damageList.innerHTML = '';
+      let total = 0;
+      damagesByRound.forEach((roundDamages, roundIndex) => {
+        const roundLi = document.createElement('li');
+        roundLi.textContent = `Rodada ${roundIndex + 1}:`;
+        const roundUl = document.createElement('ul');
+        let roundTotal = 0;
+        roundDamages.forEach(d => {
+          const player = players.find(p => p._id === d.playerId);
+          if (player) {
+            const li = document.createElement('li');
+            li.textContent = `${player.name} causou ${d.damage} de dano às ${new Date(d.timestamp).toLocaleTimeString('pt-BR')}`;
+            roundUl.appendChild(li);
+            roundTotal += d.damage;
           }
         });
-        html += '</tbody></table>';
-        previewContainer.innerHTML = html;
+        const totalLi = document.createElement('li');
+        totalLi.className = 'round-total';
+        totalLi.textContent = `Total da Rodada: ${roundTotal}`;
+        roundUl.appendChild(totalLi);
+        roundLi.appendChild(roundUl);
+        damageList.appendChild(roundLi);
+        total += roundTotal;
+      });
+      totalDamageDisplay.textContent = total;
+      console.log('Histórico atualizado:', damagesByRound);
+    }
+
+    // Add hero
+    function addHero() {
+      const name = playerNameInput.value.trim();
+      if (!name) {
+        alert('Insira o nome do herói!');
+        return;
       }
-      previewContainer.focus();
-    };
-
-    drawBtn.onclick = mobileDraw.onclick = () => {
-      const availablePlayers = players.filter(p => !p.awarded);
-      const availableItems = items.filter(i => !i.awarded);
-      if (!availablePlayers.length || !availableItems.length) return;
-      const playerPick = availablePlayers[Math.floor(Math.random() * availablePlayers.length)];
-      const itemPick = availableItems[Math.floor(Math.random() * availableItems.length)];
-      playerPick.awarded = true;
-      playerPick.item = itemPick.name;
-      itemPick.awarded = true;
-      renderLists();
-      resultArea.innerHTML = `<div class="big itemWon">${escapeHtml(itemPick.name)}</div><div class="small">concedido a</div><div class="big winner">${escapeHtml(playerPick.name)}</div>`;
-      resultArea.setAttribute('aria-live', 'polite');
-      showWinnerOverlay(playerPick.name, itemPick.name);
-      // playCelebration(); // Comentado para funcionamento local
-      triggerConfetti();
-      addToHistory(playerPick.name, itemPick.name);
-    };
-
-    function showWinnerOverlay(name, item) {
-      winnerName.textContent = name;
-      winnerItem.textContent = `Reivindicou: ${item}`;
-      winnerOverlay.classList.add('show');
-      winnerOverlay.focus();
-      setTimeout(() => {
-        winnerOverlay.classList.remove('show');
-        drawBtn.focus();
-      }, 4000);
-    }
-
-    function triggerConfetti() {
-      const c = document.getElementById('confettiCanvas'), ctx = c.getContext('2d');
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
-      const pieces = [];
-      const isMobile = window.innerWidth <= 860;
-      const pieceCount = isMobile ? 100 : 150;
-      for (let i = 0; i < pieceCount; i++) {
-        pieces.push({
-          x: Math.random() * c.width,
-          y: Math.random() * -c.height / 2,
-          r: Math.random() * 6 + 3,
-          speed: Math.random() * 4 + 2,
-          color: `hsl(${Math.random() * 60 + 180}, 70%, 60%)`,
-          rotation: Math.random() * 360,
-          rotSpeed: (Math.random() - 0.5) * 10,
-        });
+      if (players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+        alert('Nome já registrado!');
+        return;
       }
-      let ticks = 0;
-      function frame() {
-        ctx.clearRect(0, 0, c.width, c.height);
-        for (let p of pieces) {
-          p.y += p.speed;
-          p.rotation += p.rotSpeed;
-          ctx.save();
-          ctx.translate(p.x, p.y);
-          ctx.rotate(p.rotation * Math.PI / 180);
-          ctx.fillStyle = p.color;
-          ctx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
-          ctx.restore();
-        }
-        ticks++;
-        if (ticks > 150) {
-          ctx.clearRect(0, 0, c.width, c.height);
-          return;
-        }
-        requestAnimationFrame(frame);
+      const newPlayer = { _id: generateId(), name, timestamp: new Date().toISOString() };
+      roomRef.child('players').push(newPlayer);
+      playerNameInput.value = '';
+      console.log('Herói adicionado:', newPlayer);
+      alert(`Herói ${newPlayer.name} adicionado para todos!`);
+    }
+
+    // Submit round
+    function submitRound() {
+      if (players.length === 0) {
+        alert('Adicione pelo menos um herói antes de registrar uma rodada!');
+        return;
       }
-      frame();
+      const roundDamages = [];
+      let hasDamage = false;
+      players.forEach(player => {
+        const input = document.getElementById(`damage-${player._id}`);
+        const damage = parseInt(input.value) || 0;
+        if (damage > 0) hasDamage = true;
+        roundDamages.push({ _id: generateId(), playerId: player._id, damage, timestamp: new Date().toISOString() });
+        input.value = '0';
+      });
+      if (!hasDamage) {
+        alert('Pelo menos um herói deve registrar dano maior que zero!');
+        return;
+      }
+      const newRoundIndex = damagesByRound.length;
+      roomRef.child(`damagesByRound/${newRoundIndex}`).set(roundDamages);
+      roomRef.child('currentRound').set(currentRound + 1);
+      console.log('Rodada registrada:', roundDamages);
+      alert(`Rodada ${currentRound} registrada para todos!`);
     }
 
-    /*
-    function playCelebration() {
-      try {
-        fanfare.currentTime = 0;
-        fanfare.play();
-        setTimeout(() => {
-          crowd.currentTime = 0;
-          crowd.play();
-        }, 800);
-        setTimeout(() => {
-          happy.currentTime = 0;
-          happy.play();
-        }, 1300);
-      } catch (e) {}
-    }
-    */
-
-    function addToHistory(player, item) {
-      const row = document.createElement('tr');
-      row.innerHTML = `<td>${escapeHtml(player)}</td><td>${escapeHtml(item)}</td>`;
-      historyBody.appendChild(row);
+    // Reset heroes
+    function resetHeroes() {
+      if (!confirm('Tem certeza? Isso resetará heróis para todos na sala.')) return;
+      roomRef.child('players').remove();
+      console.log('Heróis resetados');
+      alert('Heróis resetados para todos!');
     }
 
-    playerNameInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') addPlayerBtn.click();
+    // Reset everything
+    function resetEverything() {
+      if (!confirm('Tem certeza? Isso reiniciará tudo para todos na sala.')) return;
+      roomRef.child('players').remove();
+      roomRef.child('damagesByRound').remove();
+      roomRef.child('currentRound').set(1);
+      console.log('Tudo reiniciado');
+      alert('Tudo reiniciado para todos!');
+    }
+
+    // Event listeners
+    joinRoomButton.onclick = joinRoom;
+    registerButton.onclick = addHero;
+    submitRoundButton.onclick = submitRound;
+    resetHeroesButton.onclick = resetHeroes;
+    resetButton.onclick = resetEverything;
+
+    // Enter key para ID da sala
+    roomIdInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') joinRoom();
     });
-
-    itemNameInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') addItemBtn.click();
-    });
-
-    renderLists();
-
-    window.addEventListener('resize', debounce(() => {
-      backgroundCanvas.width = window.innerWidth;
-      backgroundCanvas.height = window.innerHeight;
-      const c = document.getElementById('confettiCanvas');
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
-    }, 100));
-
-    setupBackgroundCanvas();
   </script>
 </body>
 </html>
