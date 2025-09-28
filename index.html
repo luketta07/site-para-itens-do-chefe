@@ -14,11 +14,17 @@
     }
     body {
       font-family: 'Arial', sans-serif;
-      background: linear-gradient(135deg, #F5F5DC 0%, #E6D9B8 100%);
+      background: linear-gradient(135deg, #4A3728 0%, #8B5A2B 100%);
       min-height: 100vh;
       display: flex;
       justify-content: center;
       padding: 20px;
+      animation: medieval-bg 10s ease-in-out infinite;
+    }
+    @keyframes medieval-bg {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
     }
     .container {
       max-width: 800px;
@@ -29,6 +35,11 @@
       padding: 20px;
       text-align: center;
       border: 2px solid #D4A017;
+      animation: fade-in 1s ease-in-out;
+    }
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     h1 {
       color: #4A3728;
@@ -46,6 +57,7 @@
       background: rgba(255, 248, 225, 0.9);
       border-radius: 8px;
       border: 1px solid #D2B48C;
+      animation: fade-in 0.5s ease-in-out;
     }
     form {
       display: flex;
@@ -62,6 +74,10 @@
       background: #FFF8E1;
       color: #4A3728;
       width: 180px;
+      transition: border-color 0.3s;
+    }
+    input:focus {
+      border-color: #A0522D;
     }
     button {
       padding: 10px 20px;
@@ -71,6 +87,7 @@
       border: 2px solid #D4A017;
       border-radius: 6px;
       cursor: pointer;
+      transition: background 0.3s;
     }
     button:hover {
       background: #A0522D;
@@ -107,6 +124,11 @@
       border-radius: 5px;
       color: #4A3728;
       font-size: 0.9rem;
+      animation: slide-in 0.5s ease-in-out;
+    }
+    @keyframes slide-in {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
     }
     li.round-total {
       font-weight: bold;
@@ -162,6 +184,34 @@
     }
     .registered {
       color: #228B22;
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #8B5A2B;
+      color: #FFF8E1;
+      padding: 15px;
+      border-radius: 5px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      transition: opacity 0.5s, transform 0.5s;
+      transform: translateY(-20px);
+      z-index: 1000;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .shake {
+      animation: shake 0.5s;
+    }
+    @keyframes shake {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+      100% { transform: translateX(0); }
     }
     @media (max-width: 600px) {
       .container {
@@ -220,6 +270,8 @@
     </div>
   </div>
 
+  <div id="toastContainer" class="toast"></div>
+
   <script>
     // Firebase Config do seu projeto
     const firebaseConfig = {
@@ -274,11 +326,21 @@
     const submitRoundButton = document.getElementById('submitRoundButton');
     const resetHeroesButton = document.getElementById('resetHeroesButton');
     const resetButton = document.getElementById('resetButton');
+    const toastContainer = document.getElementById('toastContainer');
 
     // Mostrar erro na UI
     function showError(message) {
       errorMessage.textContent = message;
       errorMessage.style.display = 'block';
+    }
+
+    // Show toast notification
+    function showToast(message) {
+      toastContainer.textContent = message;
+      toastContainer.classList.add('show');
+      setTimeout(() => {
+        toastContainer.classList.remove('show');
+      }, 3000);
     }
 
     // Generate ID
@@ -295,7 +357,7 @@
 
       roomId = roomIdInput.value.trim().toLowerCase();
       if (!roomId) {
-        alert('Digite um ID de sala válido!');
+        showToast('Digite um ID de sala válido!');
         return;
       }
       roomRef = db.ref(`rooms/${roomId}`);
@@ -341,6 +403,7 @@
       errorMessage.style.display = 'none';
 
       console.log(`Entrou na sala: ${roomId}`);
+      showToast('Bem-vindo à sala de batalha!');
     }
 
     // Update current round display
@@ -380,9 +443,9 @@
           const damage = parseInt(input.value) || 0;
           if (damage > 0) {
             savePendingDamage(playerId, damage);
-            alert('Seu dano foi registrado!');
+            showToast('Seu dano foi registrado com sucesso!');
           } else {
-            alert('Insira um dano maior que zero!');
+            showToast('Insira um dano maior que zero!');
           }
         };
       });
@@ -434,16 +497,16 @@
     // Add hero (only 1 per device)
     function addHero() {
       if (hasAddedHero) {
-        alert('Você já adicionou um herói! Só um por pessoa/dispositivo.');
+        showToast('Você já adicionou um herói! Só um por pessoa/dispositivo.');
         return;
       }
       const name = playerNameInput.value.trim();
       if (!name) {
-        alert('Insira o nome do herói!');
+        showToast('Insira o nome do herói!');
         return;
       }
       if (players.find(p => p.name.toLowerCase() === name.toLowerCase())) {
-        alert('Nome já registrado!');
+        showToast('Nome já registrado!');
         return;
       }
       const newPlayer = { _id: generateId(), name, timestamp: new Date().toISOString() };
@@ -453,13 +516,13 @@
       roomRef.child('players').push(newPlayer);
       playerNameInput.value = '';
       console.log('Herói adicionado:', newPlayer);
-      alert(`Herói ${newPlayer.name} adicionado! Você controla este herói.`);
+      showToast(`Herói ${newPlayer.name} adicionado! Você controla este herói.`);
     }
 
     // Submit round
     function submitRound() {
       if (players.length === 0) {
-        alert('Adicione pelo menos um herói antes de registrar uma rodada!');
+        showToast('Adicione pelo menos um herói antes de registrar uma rodada!');
         return;
       }
       const roundDamages = players.map(player => {
@@ -471,7 +534,9 @@
       roomRef.child('currentRound').set(currentRound + 1);
       roomRef.child('pendingDamages').remove(); // Limpa pendentes para próxima rodada
       console.log('Rodada registrada:', roundDamages);
-      alert(`Rodada ${currentRound} registrada para todos!`);
+      showToast(`Rodada ${currentRound} registrada para todos!`);
+      totalDamageDisplay.classList.add('shake'); // Animação shake no total
+      setTimeout(() => totalDamageDisplay.classList.remove('shake'), 500);
     }
 
     // Reset heroes
@@ -483,7 +548,7 @@
       hasAddedHero = false;
       registerButton.disabled = false;
       console.log('Heróis resetados');
-      alert('Heróis resetados para todos!');
+      showToast('Heróis resetados para todos!');
     }
 
     // Reset everything
@@ -497,7 +562,7 @@
       hasAddedHero = false;
       registerButton.disabled = false;
       console.log('Tudo reiniciado');
-      alert('Tudo reiniciado para todos!');
+      showToast('Tudo reiniciado para todos!');
     }
 
     // Event listeners
